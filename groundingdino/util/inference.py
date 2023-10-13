@@ -1,13 +1,11 @@
 from typing import Tuple, List
 import subprocess
-subprocess.run(["pip", "install", "opencv-python-headless"])
-import cv2
 import numpy as np
-import supervision as sv
 import torch
 from PIL import Image
 from torchvision.ops import box_convert
 import bisect
+import matplotlib.pyplot as plt  # Alternative to cv2
 
 import groundingdino.datasets.transforms as T
 from groundingdino.models import build_model
@@ -102,24 +100,25 @@ def annotate(image_source: np.ndarray, boxes: torch.Tensor, logits: torch.Tensor
     h, w, _ = image_source.shape
     boxes = boxes * torch.Tensor([w, h, w, h])
     xyxy = box_convert(boxes=boxes, in_fmt="cxcywh", out_fmt="xyxy").numpy()
-    detections = sv.Detections(xyxy=xyxy)
 
-    labels = [
-        f"{phrase} {logit:.2f}"
-        for phrase, logit
-        in zip(phrases, logits)
-    ]
+    # Visualization using matplotlib as an alternative to cv2
+    fig, ax = plt.subplots(1, figsize=(12, 8))
+    ax.imshow(image_source)
 
-    box_annotator = sv.BoxAnnotator()
-    annotated_frame = cv2.cvtColor(image_source, cv2.COLOR_RGB2BGR)
-    annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections, labels=labels)
-    return annotated_frame
+    for box, logit, phrase in zip(xyxy, logits, phrases):
+        label = f"{phrase} {logit:.2f}"
+        x, y, x_max, y_max = box
+        rect = plt.Rectangle((x, y), x_max - x, y_max - y, fill=False, edgecolor="red", linewidth=2)
+        ax.add_patch(rect)
+        ax.text(x, y, label, color="red", fontsize=12, bbox=dict(facecolor="white", alpha=0.7))
+
+    plt.axis("off")
+    plt.show()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # NEW API
 # ----------------------------------------------------------------------------------------------------------------------
-
 
 class Model:
 
@@ -142,25 +141,7 @@ class Model:
         caption: str,
         box_threshold: float = 0.35,
         text_threshold: float = 0.25
-    ) -> Tuple[sv.Detections, List[str]]:
-        """
-        import cv2
-
-        image = cv2.imread(IMAGE_PATH)
-
-        model = Model(model_config_path=CONFIG_PATH, model_checkpoint_path=WEIGHTS_PATH)
-        detections, labels = model.predict_with_caption(
-            image=image,
-            caption=caption,
-            box_threshold=BOX_THRESHOLD,
-            text_threshold=TEXT_THRESHOLD
-        )
-
-        import supervision as sv
-
-        box_annotator = sv.BoxAnnotator()
-        annotated_image = box_annotator.annotate(scene=image, detections=detections, labels=labels)
-        """
+    ) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
         processed_image = Model.preprocess_image(image_bgr=image).to(self.device)
         boxes, logits, phrases = predict(
             model=self.model,
@@ -169,13 +150,7 @@ class Model:
             box_threshold=box_threshold,
             text_threshold=text_threshold, 
             device=self.device)
-        source_h, source_w, _ = image.shape
-        detections = Model.post_process_result(
-            source_h=source_h,
-            source_w=source_w,
-            boxes=boxes,
-            logits=logits)
-        return detections, phrases
+        return boxes, logits, phrases
 
     def predict_with_classes(
         self,
@@ -183,26 +158,7 @@ class Model:
         classes: List[str],
         box_threshold: float,
         text_threshold: float
-    ) -> sv.Detections:
-        """
-        import cv2
-
-        image = cv2.imread(IMAGE_PATH)
-
-        model = Model(model_config_path=CONFIG_PATH, model_checkpoint_path=WEIGHTS_PATH)
-        detections = model.predict_with_classes(
-            image=image,
-            classes=CLASSES,
-            box_threshold=BOX_THRESHOLD,
-            text_threshold=TEXT_THRESHOLD
-        )
-
-
-        import supervision as sv
-
-        box_annotator = sv.BoxAnnotator()
-        annotated_image = box_annotator.annotate(scene=image, detections=detections)
-        """
+    ) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
         caption = ". ".join(classes)
         processed_image = Model.preprocess_image(image_bgr=image).to(self.device)
         boxes, logits, phrases = predict(
@@ -212,15 +168,7 @@ class Model:
             box_threshold=box_threshold,
             text_threshold=text_threshold,
             device=self.device)
-        source_h, source_w, _ = image.shape
-        detections = Model.post_process_result(
-            source_h=source_h,
-            source_w=source_w,
-            boxes=boxes,
-            logits=logits)
-        class_id = Model.phrases2classes(phrases=phrases, classes=classes)
-        detections.class_id = class_id
-        return detections
+        return boxes, logits, phrases
 
     @staticmethod
     def preprocess_image(image_bgr: np.ndarray) -> torch.Tensor:
@@ -241,11 +189,10 @@ class Model:
             source_w: int,
             boxes: torch.Tensor,
             logits: torch.Tensor
-    ) -> sv.Detections:
+    ) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
         boxes = boxes * torch.Tensor([source_w, source_h, source_w, source_h])
         xyxy = box_convert(boxes=boxes, in_fmt="cxcywh", out_fmt="xyxy").numpy()
-        confidence = logits.numpy()
-        return sv.Detections(xyxy=xyxy, confidence=confidence)
+        return torch.tensor(xyxy), logits, phrases
 
     @staticmethod
     def phrases2classes(phrases: List[str], classes: List[str]) -> np.ndarray:
