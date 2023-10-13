@@ -23,6 +23,7 @@
 import glob
 import os
 import subprocess
+subprocess.run(["pip", "install", "torch"])
 
 import torch
 from setuptools import find_packages, setup
