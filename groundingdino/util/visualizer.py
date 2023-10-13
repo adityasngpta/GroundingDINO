@@ -9,13 +9,13 @@
 import datetime
 import os
 
-import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from matplotlib import transforms
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
+from PIL import Image
+from matplotlib import pyplot as plt
 from pycocotools import mask as maskUtils
 
 
