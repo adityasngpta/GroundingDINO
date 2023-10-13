@@ -1,5 +1,6 @@
 from typing import Tuple, List
-
+import subprocess
+subprocess.run(["pip", "install", "opencv-python-headless"])
 import cv2
 import numpy as np
 import supervision as sv
