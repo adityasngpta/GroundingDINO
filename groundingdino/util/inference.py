@@ -132,7 +132,7 @@ class Model:
         self,
         model_config_path: str,
         model_checkpoint_path: str,
-        device: str = "cuda"
+        device: str = "cpu"
     ):
         self.model = load_model(
             model_config_path=model_config_path,
